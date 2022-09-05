@@ -1,6 +1,6 @@
 FLAGS=-g3 -Wall -Wextra -fsanitize=address -fmessage-length=0 -fPIC
-C_SRCS="./.config/hi.c" "./Configure.c" 
-CPP_SRCS="./.config/hello.cpp" 
+C_SRCS="./Configure.c" 
+CPP_SRCS=
 LIBS="-LC:/Projects/Libraries/C++/libpng16/lib" "-LC:/Projects/Libraries/C++/zlib12/lib" 
 LIBSPATH="-lpng16" "-lz"
 INCLUDE="-IC:/Projects/Libraries/C++/libpng16/include/libpng16" "-IC:/Projects/Libraries/C++/zlib12/include"
