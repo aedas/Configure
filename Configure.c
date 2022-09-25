@@ -6,30 +6,44 @@
 #include <stdlib.h>
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
+    if (argc != 3) {
         print_error_msg();
         return 1;
     }
-    if (strncmp(argv[1], DLL_MODE, CMP_LEN) && strncmp(argv[1], EXE_MODE, CMP_LEN) && strncmp(argv[1], INIT_MODE, CMP_LEN)) {
+    if (strncmp(argv[1], DLL_MODE, CMP_LEN) && strncmp(argv[1], EXE_MODE, CMP_LEN) && strncmp(argv[1], INIT_MODE, CMP_LEN) && strncmp(argv[1], INST_MODE, CMP_LEN)) {
+        print_error_msg();
+        return 1;
+    }
+    if (strncmp(argv[2], LINUX_OS, CMP_LEN) && strncmp(argv[2], WINDOWS_32_OS, CMP_LEN) && strncmp(argv[2], WINDOWS_64_OS, CMP_LEN)) {
         print_error_msg();
         return 1;
     }
     if (strncmp(argv[1], INIT_MODE, CMP_LEN) == 0) {
         return init_config_files() || init_config_instructions();
     }
+    if (strncmp(argv[1], INST_MODE, CMP_LEN) == 0) {
+        return init_config_instructions();
+    }
     if (check_config_files()) {
         print_need_init_msg();
         return 1;
     }
-    return write_src_file() || write_makefile(argv[1]);
+    return write_src_file() || write_makefile(argv[1], argv[2]);
 }
 
 int print_error_msg() {
-    printf("Usage: ./configure [-mode]\n");
+    printf("Usage: ./configure [-mode] [-os]\n");
     printf("Available modes:\n");
     printf("-init for initializing or resetting configuration files\n");
-    printf("-dll for shared libraries\n");
+    printf("-slib for shared libraries\n");
     printf("-exe for executables\n");
+    printf("-info to update instructions\n");
+    printf("\n");
+    printf("Available os (only matters for -exe):\n");
+    printf("-linux to generate linux compatible objects\n");
+    printf("-w32 to generate windows 32-bit compatible objects\n");
+    printf("-w64 to generate windows 64-bit compatible objects\n");
+    printf("\n");
     return 0;
 }
 
@@ -131,7 +145,6 @@ int init_config_instructions() {
     }
     fprintf(file, INSTRUCTIONS);
     fclose(file);
-    printf("Initialization done\n");
     printf("See ");
     printf(CONFIG_INST);
     printf(" for next steps\n");
@@ -207,7 +220,7 @@ int find_src_files(FILE *c_src, FILE *cpp_src, char *path) {
 }
 
 
-int write_makefile(char * mode) {
+int write_makefile(char * mode, char *os) {
     FILE *makefile = fopen(MAKEFILE, "w");
     if (!makefile) {
         return 1;
@@ -248,8 +261,25 @@ int write_makefile(char * mode) {
         return 1;
     }
     fprintf(makefile, FLAG_FULL);
-    fprintf(makefile, " ");
-    if (strncmp(mode, DLL_MODE, CMP_LEN)) {
+    fprintf(makefile, "\n");
+    fprintf(makefile, ASAN_FULL);
+    if (strncmp(os, LINUX_OS, CMP_LEN) == 0 || strncmp(mode, DLL_MODE, CMP_LEN) == 0) {
+        fprintf(makefile, ASAN);
+    }
+    if (strncmp(mode, EXE_MODE, CMP_LEN) == 0) {
+        fprintf(makefile, "\n");
+        fprintf(makefile, OS_FULL);
+        if (strncmp(os, LINUX_OS, CMP_LEN) == 0) {
+            fprintf(makefile, LINUX_CMD);
+        } else if (strncmp(os, WINDOWS_32_OS, CMP_LEN) == 0) {
+            fprintf(makefile, WINDOWS_32_CMD);
+        } else {
+            fprintf(makefile, WINDOWS_64_CMD);
+        }
+    }
+    fprintf(makefile, "\n");
+    fprintf(makefile, MODE_FULL);
+    if (strncmp(mode, EXE_MODE, CMP_LEN) == 0) {
         fprintf(makefile, FPIC);
     } else {
         fprintf(makefile, SHARED);
@@ -261,7 +291,19 @@ int write_makefile(char * mode) {
     write_target_cmd(makefile, target, mode);
     fprintf(makefile, MAKEFILE_OBJS);
     fprintf(makefile, "\n");
-    fprintf(makefile, MAKEFILE_ALL);
+    if (strncmp(mode, DLL_MODE, CMP_LEN) == 0) {
+        fprintf(makefile, MAKEFILE_L_CALLS);
+        fprintf(makefile, "\n");
+        fprintf(makefile, MAKEFILE_W32_CALLS);
+        fprintf(makefile, "\n");
+        fprintf(makefile, MAKEFILE_W64_CALLS);
+        fprintf(makefile, "\n");
+    }
+    if (strncmp(mode, EXE_MODE, CMP_LEN) == 0) {
+        fprintf(makefile, MAKEFILE_EXE);
+    } else {
+        fprintf(makefile, MAKEFILE_SLIB);
+    }
     fclose(target);
     fclose(include);
     fclose(libs);
@@ -343,7 +385,7 @@ int write_lib_cmd(FILE *makefile, FILE *lib_src) {
     c[0] = '\0';
     c[1] = '\0';
     word[0] = '\0';
-    fprintf(makefile, LIB_SRCS_FULL);
+    fprintf(makefile, LIB_PATH_FULL);
     while (fread(&c, sizeof(char), 1, lib_src)) {
         if (is_path) {
             if (c[0] != '\n' && c[0] != 13) {
@@ -357,10 +399,14 @@ int write_lib_cmd(FILE *makefile, FILE *lib_src) {
                     fprintf(makefile, word);
                     fprintf(makefile, "\"");
                     fprintf(makefile, " ");
+                    fprintf(makefile, "\"-Wl,-rpath,");
+                    fprintf(makefile, word);
+                    fprintf(makefile, "\"");
+                    fprintf(makefile, " ");
                 } else {
                     is_path = 0;
                     fprintf(makefile, "\n");
-                    fprintf(makefile, LIB_PATH_FULL);
+                    fprintf(makefile, LIB_SRCS_FULL);
                 }
                 word[0] = '\0';
             }
